@@ -2,8 +2,6 @@
 
 namespace Formfeed\DependablePanel;
 
-use Formfeed\NovaFlexibleContent\Http\FlexibleAttribute;
-use Formfeed\NovaFlexibleContent\Http\ScopedRequest;
 use Illuminate\Support\Str;
 
 
@@ -80,7 +78,7 @@ class DependablePanel extends Field {
      * @param  string|null  $attribute
      * @return void
      */
-    public function resolve($resource, $attribute = null) {
+    public function resolve($resource, ?string $attribute = null): void {
         $this->resource = $resource;
 
         foreach ($this->fields as $field) {
@@ -88,62 +86,20 @@ class DependablePanel extends Field {
         }
     }
 
-    public function getUpdateRules(NovaRequest $request) {
-        if ($request instanceof ScopedRequest && class_exists(FlexibleAttribute::class)) {
-            $rules = [];
-            foreach ($this->fields as $field) {
-                $field->applyDependsOn($request);
-                $fieldRules = $field->getUpdateRules($request);
-
-                // Parse nested Flexible Attributes for when panel is nested within another Flexible Layout
-                foreach ($fieldRules as $key => $rule) {
-                    if (is_array($rule) && is_a($rule['attribute'] ?? null, FlexibleAttribute::class)) {
-                        if (!(explode(".", $key)[0] === $field->attribute)) {
-                            continue;
-                        }
-                        $rules[$key] = $rule;
-                        unset($fieldRules[$key]);
-                    }
-                }
-
-                if (is_a($fieldRules['attribute'] ?? null, FlexibleAttribute::class)) {
-                    $rules = array_merge($rules, $fieldRules);
-                } else {
-                    $rules = array_merge($rules, [
-                        $field->attribute => [
-                            "attribute" => FlexibleAttribute::make($field->attribute, $request->group),
-                            "rules" => $fieldRules
-                        ]
-                    ]);
-                }
-            }
-
-            return $rules;
-        }
+    public function getUpdateRules(NovaRequest $request): array {
         $rules = [$this->attribute => []];
         foreach ($this->fields as $field) {
+            $field->applyDependsOn($request);
             $rules = array_merge($rules, $field->getUpdateRules($request));
         }
         return $rules;
     }
 
-    public function getCreationRules(NovaRequest $request) {
-        if ($request instanceof ScopedRequest && class_exists(FlexibleAttribute::class)) {
-            $rules = [];
-            foreach ($this->fields as $field) {
-                $field->default(null);
-                $field->applyDependsOn($request);
-                $rules = array_merge($rules, [
-                    $field->attribute => [
-                        "attribute" => FlexibleAttribute::make($field->attribute, $request->group),
-                        "rules" => $field->getCreationRules($request)
-                    ]
-                ]);
-            }
-            return $rules;
-        }
+    public function getCreationRules(NovaRequest $request): array {
         $rules = [$this->attribute => []];
         foreach ($this->fields as $field) {
+            $field->default(null);
+            $field->applyDependsOn($request);
             $rules = array_merge($rules, $field->getCreationRules($request));
         }
         return $rules;
@@ -195,7 +151,7 @@ class DependablePanel extends Field {
         return $this;
     }
 
-    public function getValidationAttributeNames(NovaRequest $request) {
+    public function getValidationAttributeNames(NovaRequest $request): array {
         $this->applyDependsOn($request);
         return array_merge(
             [$this->validationKey() => $this->name],
